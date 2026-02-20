@@ -6,11 +6,11 @@ A CLI tool that fetches your recent meeting notes via the [Airbyte Agent Granola
 
 ## How it works
 
-1. Connects to Granola via Airbyte's hosted agent connector
-2. Searches for meeting notes created within the specified time window
+1. Connects to Granola via the Airbyte agent connector (hosted or local execution)
+2. Fetches meeting notes created within the specified time window
 3. Fetches full note content (summary + transcript) for each result
 4. Uses a PydanticAI agent (Claude Sonnet) to extract action items from each note
-5. Outputs results as formatted text or JSON
+5. Outputs results as formatted text
 
 ## Setup
 
@@ -19,7 +19,9 @@ A CLI tool that fetches your recent meeting notes via the [Airbyte Agent Granola
 - Python 3.14+
 - [uv](https://docs.astral.sh/uv/)
 - An [Anthropic API key](https://console.anthropic.com/)
-- Airbyte Cloud credentials (client ID + secret) with a provisioned Granola connector
+- Granola credentials — either:
+  - **Hosted mode** (preferred): Airbyte Cloud credentials (client ID + secret) with a provisioned Granola connector
+  - **Local mode**: A Granola Enterprise API key
 
 ### Install
 
@@ -37,11 +39,22 @@ Copy the example env file and fill in your credentials:
 cp .env.example .env
 ```
 
+The execution mode is auto-detected based on which environment variables are set.
+
+**Hosted mode** (preferred — proxied via Airbyte Cloud):
+
 ```
 ANTHROPIC_API_KEY=your-anthropic-api-key
 AIRBYTE_CLIENT_ID=your-airbyte-client-id
 AIRBYTE_CLIENT_SECRET=your-airbyte-client-secret
 AIRBYTE_CUSTOMER_NAME=your-customer-name
+```
+
+**Local mode** (direct Granola API calls):
+
+```
+ANTHROPIC_API_KEY=your-anthropic-api-key
+GRANOLA_API_KEY=your-granola-api-key
 ```
 
 ## Usage
@@ -52,9 +65,6 @@ uv run granola-to-task
 
 # Look back 14 days
 uv run granola-to-task --days 14
-
-# Output as JSON
-uv run granola-to-task --format json
 
 # Enable verbose logging (connector actions)
 uv run granola-to-task -v

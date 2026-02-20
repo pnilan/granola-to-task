@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
 import logging
 import sys
 
@@ -12,7 +11,7 @@ from granola_to_task.agent import extract_action_items
 from granola_to_task.source import fetch_recent_notes, get_connector
 
 
-async def run(days: int, output_format: str) -> None:
+async def run(days: int) -> None:
     connector = get_connector()
 
     print(f"Fetching meeting notes from the last {days} day(s)...", file=sys.stderr)
@@ -31,21 +30,17 @@ async def run(days: int, output_format: str) -> None:
         if result.action_items:
             all_results.append(result)
 
-    if output_format == "json":
-        output = [r.model_dump() for r in all_results]
-        print(json.dumps(output, indent=2))
-    else:
-        if not all_results:
-            print("No action items found.")
-            return
+    if not all_results:
+        print("No action items found.")
+        return
 
-        for meeting in all_results:
-            print(f"## {meeting.meeting_title} ({meeting.meeting_date})")
-            for i, item in enumerate(meeting.action_items, 1):
-                assignee = f" [@{item.assignee}]" if item.assignee else ""
-                due = f" (due: {item.due_date})" if item.due_date else ""
-                print(f"  {i}. {item.description}{assignee}{due}")
-            print()
+    for meeting in all_results:
+        print(f"## {meeting.meeting_title} ({meeting.meeting_date})")
+        for i, item in enumerate(meeting.action_items, 1):
+            assignee = f" [@{item.assignee}]" if item.assignee else ""
+            due = f" (due: {item.due_date})" if item.due_date else ""
+            print(f"  {i}. {item.description}{assignee}{due}")
+        print()
 
 
 def main() -> None:
@@ -59,13 +54,6 @@ def main() -> None:
         type=int,
         default=7,
         help="Number of days to look back for meeting notes (default: 7)",
-    )
-    parser.add_argument(
-        "--format",
-        choices=["text", "json"],
-        default="text",
-        dest="output_format",
-        help="Output format (default: text)",
     )
     parser.add_argument(
         "-v", "--verbose",
@@ -97,4 +85,4 @@ def main() -> None:
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-    asyncio.run(run(args.days, args.output_format))
+    asyncio.run(run(args.days))

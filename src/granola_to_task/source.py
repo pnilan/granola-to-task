@@ -4,33 +4,39 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from airbyte_agent_granola import AirbyteAuthConfig, GranolaConnector, Note
+from airbyte_agent_granola import AirbyteAuthConfig, GranolaAuthConfig, GranolaConnector, Note
 
 logger = logging.getLogger(__name__)
 
 
 def get_connector() -> GranolaConnector:
-    """Create a GranolaConnector in hosted execution mode.
+    """Create a GranolaConnector, auto-detecting execution mode from env vars.
 
-    Connects to an existing hosted connector on Airbyte Cloud using
-    customer_name lookup. Granola API credentials are managed server-side.
+    Hosted mode (preferred): AIRBYTE_CLIENT_ID + AIRBYTE_CLIENT_SECRET are set.
+    Local mode (fallback):   GRANOLA_API_KEY is set.
     """
     client_id = os.environ.get("AIRBYTE_CLIENT_ID")
     client_secret = os.environ.get("AIRBYTE_CLIENT_SECRET")
-    if not client_id or not client_secret:
-        raise SystemExit(
-            "Error: AIRBYTE_CLIENT_ID and AIRBYTE_CLIENT_SECRET environment variables must be set."
+    if client_id and client_secret:
+        customer_name = os.environ.get("AIRBYTE_CUSTOMER_NAME", "patrick")
+        logger.info("Using hosted execution mode (customer=%s)", customer_name)
+        return GranolaConnector(
+            auth_config=AirbyteAuthConfig(
+                customer_name=customer_name,
+                airbyte_client_id=client_id,
+                airbyte_client_secret=client_secret,
+            )
         )
 
-    customer_name = os.environ.get("AIRBYTE_CUSTOMER_NAME", "patrick")
+    api_key = os.environ.get("GRANOLA_API_KEY")
+    if api_key:
+        logger.info("Using local execution mode")
+        return GranolaConnector(auth_config=GranolaAuthConfig(api_key=api_key))
 
-    logger.info("Connecting to Granola connector (customer=%s)", customer_name)
-    return GranolaConnector(
-        auth_config=AirbyteAuthConfig(
-            customer_name=customer_name,
-            airbyte_client_id=client_id,
-            airbyte_client_secret=client_secret,
-        )
+    raise SystemExit(
+        "Error: No Granola credentials found.\n"
+        "Set AIRBYTE_CLIENT_ID + AIRBYTE_CLIENT_SECRET for hosted mode, or\n"
+        "set GRANOLA_API_KEY for local mode."
     )
 
 
@@ -125,10 +131,14 @@ async def fetch_recent_notes(
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
 
-    note_ids = await _search_note_ids(connector, cutoff.isoformat())
+    note_ids: list[str] = []
+    try:
+        note_ids = await _search_note_ids(connector, cutoff.isoformat())
+    except NotImplementedError:
+        logger.info("Search not available (local mode), using list action")
 
     if not note_ids:
-        logger.info("Search returned no results, falling back to list action")
+        logger.info("Falling back to list action")
         note_ids = await _list_note_ids(connector, cutoff.strftime("%Y-%m-%d"))
 
     logger.info("Fetching full details for %d note(s)", len(note_ids))
